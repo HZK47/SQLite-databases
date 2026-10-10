@@ -55,11 +55,11 @@ def _check_sqlite_version():
     """
     Check whether the SQLite library supports STRICT tables.
 
-    Uses the SQLite version loaded by Python, not the Python interpreter
-    version. A successful check is cached for the lifetime of the process.
+    Uses the SQLite version loaded by Python, not the interpreter version.
+    A successful check is cached for the lifetime of the process.
 
     Returns:
-        None: If the SQLite version meets the minimum requirement.
+        None: If SQLite meets the minimum requirement.
 
     Raises:
         RuntimeError: If SQLite is older than the required version.
@@ -89,7 +89,7 @@ def _handle_errors(func):
         callable: A wrapped function with the same return value as func.
 
     Raises:
-        sqlite3.Error: Re-raises any SQLite exception after logging its traceback.
+        sqlite3.Error: Re-raises SQLite errors after logging their traceback.
 
     Usage:
         @_handle_errors
@@ -112,7 +112,7 @@ def _register_query(action):
     Register a query-building function for a specific SQL action.
 
     The decorator stores the function in query_builders without calling it.
-    An action can be registered only once, and its name must use A-Z.
+    Each action can be registered only once and must use uppercase A-Z.
 
     Args:
         action (str): Uppercase SQL action name, such as 'SELECT'.
@@ -122,7 +122,7 @@ def _register_query(action):
 
     Raises:
         TypeError: If action is not a string or the decorated object is not callable.
-        ValueError: If action is empty, contains invalid characters, or is already registered.
+        ValueError: If action is empty, invalid, or already registered.
 
     Usage:
         @_register_query("SELECT")
@@ -131,7 +131,6 @@ def _register_query(action):
     """
     if not isinstance(action, str):
         raise TypeError(f"Query action must be a string, received {type(action).__name__}.")
-
     if not action or any(char not in string.ascii_uppercase for char in action):
         raise ValueError(f"Invalid query action {action!r}. Use uppercase letters A-Z only.")
 
@@ -150,23 +149,23 @@ def _register_query(action):
 # Schema and configuration validation
 def _check_columns(database, table=None, columns=()):
     """
-    Validate the database, table, and column names registered in Python.
+    Validate database, table, and column names registered in Python.
 
-    This checks the configuration dictionary only, including basic column
-    definition types. It does not inspect or validate the physical schema.
+    Checks the configuration dictionary, including basic column definition
+    types. Does not inspect or validate the physical SQLite schema.
 
     Args:
-        database (str): Name of a database in the databases dictionary.
+        database (str): Name of a registered database.
         table (str | None): Table to validate, or None to check only the database.
-        columns (str | iterable[str] | None): Column names to check; an empty
-            iterable or None validates only the database and table.
+        columns (str | iterable[str] | None): Column names to validate.
+            An empty iterable or None checks only the database and table.
 
     Returns:
-        None: If every requested name is registered.
+        None: If all requested names are registered.
 
     Raises:
-        TypeError: If a name, table definition, or column collection has an invalid type.
-        ValueError: If a database, table, or column is unknown, or a definition is empty.
+        TypeError: If a name or definition has an invalid type.
+        ValueError: If a database, table, or column is unknown or empty.
 
     Usage:
         _check_columns("materials")
@@ -185,12 +184,14 @@ def _check_columns(database, table=None, columns=()):
         raise TypeError(f"Table name must be a string, received {type(table).__name__}.")
 
     tables = databases[database].get("tables")
+
     if not isinstance(tables, dict):
         raise TypeError(f"Table definitions for database '{database}' must be a dictionary.")
     if table not in tables:
         raise ValueError(f"Unknown table '{table}' in database '{database}'. Available tables: {sorted(tables)}.")
 
     column_definitions = tables[table]
+
     if not isinstance(column_definitions, dict):
         raise TypeError(f"Column definitions for table '{table}' must be a dictionary.")
     if not column_definitions:
@@ -198,6 +199,7 @@ def _check_columns(database, table=None, columns=()):
 
     for name, definition in column_definitions.items():
         _quote_identifier(name)
+
         if not isinstance(definition, str):
             raise TypeError(f"Definition of column '{name}' must be a string.")
         if not definition.strip():
@@ -227,14 +229,14 @@ def _quote_identifier(name):
     """
     Quote a SQL table or column name without changing its contents.
 
-    Double quotes inside the identifier are escaped by doubling them.
-    Leading and trailing spaces, when present, are preserved.
+    Internal double quotes are escaped by doubling them. Leading and
+    trailing spaces are preserved.
 
     Args:
-        name (str): Table or column name to quote.
+        name (str): SQL identifier to quote.
 
     Returns:
-        str: The SQL identifier enclosed in double quotes.
+        str: The identifier enclosed in double quotes.
 
     Raises:
         TypeError: If name is not a string.
@@ -263,11 +265,11 @@ def _validate_config(database):
         database (str): Name of the registered database to validate.
 
     Returns:
-        None: If all supported configuration settings are valid.
+        None: If all supported settings are valid.
 
     Raises:
-        TypeError: If a field has an incorrect Python type.
-        ValueError: If a field is missing, unknown, or has a disallowed value.
+        TypeError: If a configuration field has an invalid type.
+        ValueError: If a required field is missing or contains an invalid value.
 
     Usage:
         _validate_config("materials")
@@ -288,32 +290,38 @@ def _validate_config(database):
         )
 
     path = database_info["path"]
+
     if not isinstance(path, Path):
         raise TypeError(f"'path' must be a Path object, received {type(path).__name__}.")
 
     version = database_info["version"]
+
     if not isinstance(version, str):
         raise TypeError(f"'version' must be a string, received {type(version).__name__}.")
     if not all(part.isascii() and part.isdigit() for part in version.split(".")):
         raise ValueError(f"Invalid version '{version}'. Use numeric components separated by dots.")
 
     schema_version = database_info["schema_version"]
+
     if type(schema_version) is not int:
         raise TypeError(f"'schema_version' must be an integer, received {type(schema_version).__name__}.")
     if schema_version < 0:
         raise ValueError(f"'schema_version' cannot be negative, received {schema_version}.")
 
     timeout = database_info["timeout"]
+
     if type(timeout) not in (int, float):
         raise TypeError(f"'timeout' must be an integer or float, received {type(timeout).__name__}.")
     if not isfinite(timeout) or timeout < 0:
         raise ValueError(f"'timeout' must be finite and non-negative, received {timeout}.")
 
     foreign_keys = database_info["foreign_keys"]
+
     if type(foreign_keys) is not bool:
         raise TypeError(f"'foreign_keys' must be a boolean, received {type(foreign_keys).__name__}.")
 
     journal_mode = database_info["journal_mode"]
+
     if not isinstance(journal_mode, str):
         raise TypeError(f"'journal_mode' must be a string, received {type(journal_mode).__name__}.")
     if journal_mode not in PERMITTED_JOURNAL_MODES:
@@ -322,12 +330,14 @@ def _validate_config(database):
         )
 
     description = database_info["description"]
+
     if not isinstance(description, str):
         raise TypeError(f"'description' must be a string, received {type(description).__name__}.")
     if not description or description.isspace():
         raise ValueError("'description' cannot be empty or contain only whitespace.")
 
     backup_path = database_info["backup_path"]
+
     if not isinstance(backup_path, Path):
         raise TypeError(f"'backup_path' must be a Path object, received {type(backup_path).__name__}.")
     if path.resolve() == backup_path.resolve():
@@ -338,24 +348,22 @@ def _where(database, table, filters=None):
     """
     Build a parameterized WHERE clause joined by AND conditions.
 
-    Supports implicit equality, explicit eq/ne/gt/gte/lt/lte/like, IN
-    lists, and IS NULL / IS NOT NULL checks. SQL values are never
-    interpolated directly into the statement.
+    Supports implicit equality, eq/ne/gt/gte/lt/lte/like, IN lists,
+    and IS NULL/IS NOT NULL checks. Values use SQLite placeholders.
 
     Args:
         database (str): Name of the registered database.
         table (str): Name of the registered table.
-        filters (dict | None): Mapping of columns to a direct value or a
-            one-operator dictionary, such as {'price': {'gte': 10}}.
-            None or an empty dictionary means no filtering.
+        filters (dict | None): Columns mapped to direct values or dictionaries
+            containing one operator, such as {'price': {'gte': 10}}.
 
     Returns:
-        tuple[str, tuple]: The SQL clause and parameters in placeholder order.
-            Returns ('', ()) if no conditions are supplied.
+        tuple[str, tuple]: The WHERE clause and parameters.
+            Returns ('', ()) when no filters are supplied.
 
     Raises:
         TypeError: If filters or an operator value has an invalid type.
-        ValueError: If a column or operator is unknown, or a filter is invalid.
+        ValueError: If a column, operator, or filter value is invalid.
 
     Usage:
         _where("materials", "school", {"name": "Pencil"})
@@ -422,23 +430,23 @@ def _validate_write_filters(database, table, filters, allow_all, require_unique)
     """
     Validate the filters and safety settings shared by UPDATE and DELETE.
 
-    By default, a filtered write must use equality on a single-column
-    PRIMARY KEY or UNIQUE field declared in the Python table definition.
-    These declarations are not yet verified against the physical SQLite schema.
+    By default, a filtered write requires equality on a declared
+    PRIMARY KEY or single-column UNIQUE field. Physical constraints
+    are not yet verified against the actual SQLite schema.
 
     Args:
         database (str): Name of the registered database.
-        table (str): Name of the table being modified.
-        filters (dict | None): Conditions determining which records are affected.
-        allow_all (bool): Whether an unfiltered modification is permitted.
-        require_unique (bool): Whether an equality filter on a unique field is required.
+        table (str): Table being modified.
+        filters (dict | None): Conditions identifying records.
+        allow_all (bool): Allow operations without filters.
+        require_unique (bool): Require equality on a unique column.
 
     Returns:
-        tuple[str, tuple]: A WHERE clause and its SQL parameters.
+        tuple[str, tuple]: The WHERE clause and its parameters.
 
     Raises:
         TypeError: If a safety option or filter has an incorrect type.
-        ValueError: If the operation lacks a required filter or unique condition.
+        ValueError: If required filters or unique conditions are missing.
 
     Usage:
         _validate_write_filters("materials", "school", {"id": 1}, False, True)
@@ -485,71 +493,118 @@ def _validate_write_filters(database, table, filters, allow_all, require_unique)
 
 
 # Connection management
-@_handle_errors
-def _connect_database(database):
+class _ConnectionManager:
     """
-    Open and configure a SQLite connection for a registered database.
+    Open, configure, and close registered SQLite database connections.
 
-    Creates parent directories when missing, checks the SQLite version,
-    and applies foreign-key enforcement independently for this connection.
-    The caller must close the returned connection after use.
+    Supports read-write and read-only access. Uses a context manager to
+    commit successful transactions, roll back failures, and close connections.
 
     Args:
-        database (str): Name of the database configuration to use.
-
-    Returns:
-        sqlite3.Connection: An open connection with foreign keys configured.
-
-    Raises:
-        TypeError: If a configuration entry has an invalid type.
-        ValueError: If a registered configuration is invalid.
-        sqlite3.Error: If opening or configuring SQLite fails.
-        OSError: If the database directory cannot be created.
+        database (str): Registered database name.
+        read_only (bool): Open an existing database without write access.
 
     Usage:
-        with closing(_connect_database("materials")) as connection:
-            ...
+        with _ConnectionManager("materials") as connection:
+            connection.execute("SELECT 1")
+
+        with _ConnectionManager("materials", read_only=True) as connection:
+            connection.execute("SELECT 1")
     """
-    _check_sqlite_version()
-    _validate_config(database)
 
-    database_info = databases[database]["database_info"]
-    database_path = database_info["path"]
-    database_path.parent.mkdir(parents=True, exist_ok=True)
+    def __init__(self, database, read_only=False):
+        if type(read_only) is not bool:
+            raise TypeError("'read_only' must be a boolean.")
 
-    connection = sqlite3.connect(database_path, timeout=database_info["timeout"])
+        self.database = database
+        self.read_only = read_only
+        self._connection = None
 
-    try:
-        foreign_keys = "ON" if database_info["foreign_keys"] else "OFF"
-        connection.execute(f"PRAGMA foreign_keys = {foreign_keys}")
-        result = connection.execute("PRAGMA foreign_keys").fetchone()
+    @_handle_errors
+    def __enter__(self):
+        """
+        Open and configure the SQLite connection.
 
-        if result is None or bool(result[0]) != database_info["foreign_keys"]:
-            raise sqlite3.DatabaseError(
-                f"Could not configure foreign keys for database '{database}'. Expected: {foreign_keys}."
-            )
+        Returns:
+            sqlite3.Connection: Open and configured connection.
 
+        Raises:
+            RuntimeError: If the manager is already open or SQLite is outdated.
+            ValueError: If the database configuration is invalid.
+            sqlite3.Error: If SQLite cannot open or configure the database.
+            OSError: If a required directory cannot be created.
+        """
+        if self._connection is not None:
+            raise RuntimeError("Connection manager is already open.")
+
+        _check_sqlite_version()
+        _validate_config(self.database)
+
+        database_info = databases[self.database]["database_info"]
+        database_path = database_info["path"]
+
+        if self.read_only:
+            path = database_path.resolve().as_uri() + "?mode=ro"
+        else:
+            database_path.parent.mkdir(parents=True, exist_ok=True)
+            path = database_path
+
+
+        connection = sqlite3.connect(path, timeout=database_info["timeout"], uri=self.read_only)
+
+        try:
+            foreign_keys = "ON" if database_info["foreign_keys"] else "OFF"
+            connection.execute(f"PRAGMA foreign_keys = {foreign_keys}")
+
+            with closing(connection.execute("PRAGMA foreign_keys")) as cursor:
+                result = cursor.fetchone()
+
+            if result is None or bool(result[0]) != database_info["foreign_keys"]:
+                raise sqlite3.DatabaseError(
+                    f"Could not configure foreign keys for database '{self.database}'. "
+                    f"Expected: {foreign_keys}."
+                )
+
+        except Exception:
+            connection.close()
+            raise
+
+        self._connection = connection
         return connection
 
-    except Exception:
-        connection.close()
-        raise
+    @_handle_errors
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        Finalize the transaction and close the SQLite connection.
+
+        Args:
+            exc_type: Exception type, if present.
+            exc_value: Exception instance, if present.
+            traceback: Exception traceback, if present.
+
+        Returns:
+            bool | None: SQLite context manager result; exceptions are not suppressed.
+        """
+        try:
+            return self._connection.__exit__(exc_type, exc_value, traceback)
+        finally:
+            self._connection.close()
+            self._connection = None
 
 
 @_handle_errors
 def initialize_database(database):
     """
-    Apply journal settings and create the tables registered for a database.
+    Apply journal settings and create registered SQLite tables.
 
-    Configures journal_mode and creates missing STRICT tables. Existing tables
-    are not modified or checked for structural compatibility. This function
-    does not perform schema migrations or assign the configured schema_version.
+    Sets journal_mode and creates missing STRICT tables. Existing tables
+    are not modified, compared, or migrated. Does not assign schema_version.
 
     Args:
-        database (str): Name of the registered database to initialize.
+        database (str): Name of the database to initialize.
 
     Returns:
-        None: If journal setup and table creation complete successfully.
+        None: If initialization succeeds.
 
     Raises:
         TypeError: If the database configuration has an invalid type.
@@ -562,6 +617,7 @@ def initialize_database(database):
     _validate_config(database)
 
     table_definitions = databases[database].get("tables")
+
     if not isinstance(table_definitions, dict):
         raise TypeError(f"Tables for database '{database}' must be a dictionary.")
 
@@ -571,8 +627,10 @@ def initialize_database(database):
     database_info = databases[database]["database_info"]
     journal_mode = database_info["journal_mode"]
 
-    with closing(_connect_database(database)) as connection:
-        result = connection.execute(f"PRAGMA journal_mode = {journal_mode}").fetchone()
+    with _ConnectionManager(database) as connection:
+        with closing(connection.execute(f"PRAGMA journal_mode = {journal_mode}")) as cursor:
+            result = cursor.fetchone()
+
         actual_mode = result[0].upper() if result else None
 
         if actual_mode != journal_mode:
@@ -581,11 +639,274 @@ def initialize_database(database):
                 f"SQLite reported {actual_mode!r}."
             )
 
-        with connection:
-            connection.execute("BEGIN IMMEDIATE")
-            for table in table_definitions:
-                query, parameters = query_builders["CREATE"](database, table)
-                connection.execute(query, parameters)
+        connection.execute("BEGIN IMMEDIATE").close()
+
+        for table in table_definitions:
+            query, parameters = query_builders["CREATE"](database, table)
+            connection.execute(query, parameters).close()
+
+
+# SQLite schema inspection
+@_handle_errors
+def _table_exists(connection, table):
+    """
+    Check whether a table exists in the physical SQLite database.
+
+    Queries sqlite_schema instead of relying on the Python configuration.
+    Does not create or modify tables and leaves the connection open.
+
+    Args:
+        connection (sqlite3.Connection): An open SQLite connection.
+        table (str): Name of the table to find.
+
+    Returns:
+        bool: True if the table exists, otherwise False.
+
+    Raises:
+        sqlite3.Error: If SQLite cannot execute the query.
+
+    Usage:
+        with _ConnectionManager("materials", read_only=True) as connection:
+            exists = _table_exists(connection, "school")
+    """
+    query = "SELECT name FROM main.sqlite_schema WHERE type = 'table' AND name = ?"
+
+    with closing(connection.execute(query, (table,))) as cursor:
+        return cursor.fetchone() is not None
+
+
+@_handle_errors
+def _get_table_columns(connection, table):
+    """
+    Retrieve information about the columns of an existing SQLite table.
+
+    Uses PRAGMA table_xinfo to include normal, generated, and hidden
+    columns. Results are indexed by column name.
+
+    Each SQLite row contains seven fields:
+        0. cid: Column identifier or position.
+        1. name: Column name.
+        2. type: Declared SQL data type.
+        3. notnull: Whether an explicit NOT NULL constraint exists.
+        4. dflt_value: Default value expression, or None.
+        5. pk: Position in the primary key, or 0.
+        6. hidden: Normal, hidden, or generated column indicator.
+
+    Args:
+        connection (sqlite3.Connection): An open SQLite connection.
+        table (str): Name of the table to inspect.
+
+    Returns:
+        dict[str, tuple]: Column names mapped to complete metadata tuples.
+
+    Raises:
+        TypeError: If the table name has an invalid type.
+        ValueError: If the table name is invalid or the table does not exist.
+        sqlite3.Error: If SQLite cannot inspect the table.
+
+    Usage:
+        with _ConnectionManager("materials", read_only=True) as connection:
+            columns = _get_table_columns(connection, "school")
+            print(columns["price"][2])  # REAL
+    """
+    with closing(connection.execute(f"PRAGMA main.table_xinfo({_quote_identifier(table)})")) as cursor:
+        rows = cursor.fetchall()
+
+    if not rows and not _table_exists(connection, table):
+        raise ValueError(f"Table '{table}' does not exist in the SQLite database.")
+
+    return {row[1]: row for row in rows}
+
+
+@_handle_errors
+def _get_table_sql(connection, table):
+    """
+    Retrieve the stored CREATE TABLE statement of an existing SQLite table.
+
+    Reads sqlite_schema to obtain the table's SQL definition, including
+    constraints not completely described by PRAGMA table_xinfo. The stored
+    statement may reflect modifications made through ALTER TABLE.
+
+    Args:
+        connection (sqlite3.Connection): An open SQLite connection.
+        table (str): Name of the table to inspect.
+
+    Returns:
+        str: CREATE TABLE statement stored by SQLite.
+
+    Raises:
+        ValueError: If the table does not exist.
+        sqlite3.Error: If SQLite cannot retrieve the definition.
+
+    Usage:
+        with _ConnectionManager("materials", read_only=True) as connection:
+            sql = _get_table_sql(connection, "school")
+    """
+    query = "SELECT sql FROM main.sqlite_schema WHERE type = 'table' AND name = ?"
+
+    with closing(connection.execute(query, (table,))) as cursor:
+        result = cursor.fetchone()
+
+        if result is None:
+            raise ValueError(f"Table '{table}' does not exist in the SQLite database.")
+
+        return result[0]
+
+
+@_handle_errors
+def _get_unique_indexes(connection, table):
+    """
+    Return the names of unique indexes belonging to a SQLite table.
+
+    Uses PRAGMA index_list and selects entries whose unique flag is 1.
+    Includes composite and partial unique indexes, which do not necessarily
+    guarantee the uniqueness of an individual column.
+
+    Args:
+        connection (sqlite3.Connection): An open SQLite connection.
+        table (str): Table whose indexes should be inspected.
+
+    Returns:
+        list[str]: Names of unique indexes, or an empty list.
+
+    Raises:
+        TypeError: If the table name is not a string.
+        ValueError: If the table name is empty or whitespace.
+        sqlite3.Error: If SQLite cannot retrieve the indexes.
+
+    Usage:
+        _get_unique_indexes(connection, "school")
+    """
+    query = f"PRAGMA main.index_list({_quote_identifier(table)})"
+
+    with closing(connection.execute(query)) as cursor:
+        return [row[1] for row in cursor.fetchall() if row[2] == 1]
+
+
+@_handle_errors
+def _get_index_columns(connection, index):
+    """
+    Retrieve all components of an SQLite index using PRAGMA index_xinfo.
+
+    Each row contains position, column ID, column name, sort direction,
+    collation, and whether the entry belongs to the index key.
+    Expressions and auxiliary columns are also included.
+
+    Args:
+        connection (sqlite3.Connection): An open SQLite connection.
+        index (str): Name of the index to inspect.
+
+    Returns:
+        list[tuple]: Index metadata rows, or an empty list.
+
+    Raises:
+        TypeError: If the index name is not a string.
+        ValueError: If the index name is empty or whitespace.
+        sqlite3.Error: If SQLite cannot inspect the index.
+
+    Usage:
+        _get_index_columns(connection, "idx_school_name")
+    """
+    query = f"PRAGMA main.index_xinfo({_quote_identifier(index)})"
+
+    with closing(connection.execute(query)) as cursor:
+        return cursor.fetchall()
+
+
+@_handle_errors
+def _get_table_foreign_keys(connection, table):
+    """
+    Retrieve foreign key definitions associated with a SQLite table.
+
+    Uses PRAGMA foreign_key_list. Each row identifies the foreign key,
+    referenced table, source and target columns, and update/delete
+    actions. Composite foreign keys may produce multiple rows.
+
+    Args:
+        connection (sqlite3.Connection): An open SQLite connection.
+        table (str): Table whose foreign keys should be inspected.
+
+    Returns:
+        list[tuple]: Foreign key metadata, or an empty list.
+
+    Raises:
+        TypeError: If the table name is not a string.
+        ValueError: If the table name is empty or whitespace.
+        sqlite3.Error: If SQLite cannot inspect the table.
+
+    Usage:
+        _get_table_foreign_keys(connection, "school")
+    """
+    query = f"PRAGMA main.foreign_key_list({_quote_identifier(table)})"
+
+    with closing(connection.execute(query)) as cursor:
+        return cursor.fetchall()
+
+
+@_handle_errors
+def _get_table_options(connection, table):
+    """
+    Retrieve a SQLite table's structural options.
+
+    Uses PRAGMA table_list to obtain its type, column count,
+    WITHOUT ROWID setting, and STRICT setting.
+
+    Args:
+        connection (sqlite3.Connection): An open SQLite connection.
+        table (str): Table whose options should be inspected.
+
+    Returns:
+        dict | None: Table options, or None if the table does not exist.
+
+    Raises:
+        TypeError: If the table name is not a string.
+        ValueError: If the table name is empty or whitespace.
+        sqlite3.Error: If SQLite cannot inspect the schema.
+
+    Usage:
+        _get_table_options(connection, "school")
+    """
+    _quote_identifier(table)
+
+    with closing(connection.execute("PRAGMA main.table_list")) as cursor:
+        for row in cursor:
+            if row[0] == "main" and row[1] == table:
+                return {
+                    "name": row[1],
+                    "type": row[2],
+                    "column_count": row[3],
+                    "without_rowid": bool(row[4]),
+                    "strict": bool(row[5]),
+                }
+
+    return None
+
+
+@_handle_errors
+def _get_table_triggers(connection, table):
+    """
+    Retrieve trigger names and SQL definitions associated with a table.
+
+    Reads sqlite_schema and orders the matching triggers by name.
+    Does not execute triggers or modify the database.
+
+    Args:
+        connection (sqlite3.Connection): An open SQLite connection.
+        table (str): Table whose triggers should be inspected.
+
+    Returns:
+        list[tuple]: Tuples containing trigger names and SQL definitions.
+
+    Raises:
+        sqlite3.Error: If SQLite cannot inspect the schema.
+
+    Usage:
+        _get_table_triggers(connection, "school")
+    """
+    query = "SELECT name, sql FROM main.sqlite_schema WHERE type = 'trigger' AND tbl_name = ? ORDER BY name"
+
+    with closing(connection.execute(query, (table,))) as cursor:
+        return cursor.fetchall()
 
 
 # SQL query builders
@@ -594,16 +915,15 @@ def _build_create(database, table):
     """
     Build a STRICT CREATE TABLE statement from the registered schema.
 
-    Uses the column names and SQL definitions declared for the table.
-    IF NOT EXISTS avoids errors for an existing table, but it does not
-    verify whether that table has the expected structure.
+    Uses the declared column names and SQL definitions. IF NOT EXISTS
+    prevents an error for an existing table but does not validate its structure.
 
     Args:
         database (str): Name of the registered database.
-        table (str): Name of the registered table to create.
+        table (str): Name of the table to create.
 
     Returns:
-        tuple[str, tuple]: The CREATE TABLE statement and an empty parameter tuple.
+        tuple[str, tuple]: CREATE TABLE statement and an empty tuple.
 
     Raises:
         TypeError: If the table definition has an invalid type.
@@ -616,8 +936,8 @@ def _build_create(database, table):
 
     column_definitions = databases[database]["tables"][table]
     columns = ", ".join(f"{_quote_identifier(name)} {definition}" for name, definition in column_definitions.items())
-
     query = f"CREATE TABLE IF NOT EXISTS {_quote_identifier(table)} ({columns}) STRICT"
+
     return query, ()
 
 
@@ -626,20 +946,20 @@ def _build_insert(database, table, values):
     """
     Build a parameterized INSERT statement for a single record.
 
-    Uses only the columns supplied in values. SQLite applies NOT NULL,
-    STRICT, CHECK, UNIQUE, and other constraints when the query executes.
+    Uses the columns supplied in values. SQLite enforces table constraints
+    when the generated statement is executed.
 
     Args:
         database (str): Name of the registered database.
-        table (str): Name of the registered table.
-        values (dict): Column names mapped to values to insert.
+        table (str): Name of the target table.
+        values (dict): Columns mapped to values to insert.
 
     Returns:
-        tuple[str, tuple]: The INSERT statement and values in placeholder order.
+        tuple[str, tuple]: INSERT statement and its parameters.
 
     Raises:
         TypeError: If values is not a dictionary.
-        ValueError: If values is empty or includes an unknown column.
+        ValueError: If values is empty or contains unknown columns.
 
     Usage:
         query, parameters = query_builders["INSERT"](
@@ -663,32 +983,31 @@ def _build_insert(database, table, values):
 @_register_query("SELECT")
 def _build_select(database, table, columns="*", filters=None, order_by=None, descending=False, limit=20, offset=0):
     """
-    Build a SELECT statement with optional filtering, sorting, and pagination.
+    Build a SELECT statement with filtering, sorting, and pagination.
 
-    Selected columns are validated against the registered schema. Filter values,
-    LIMIT, and OFFSET are passed separately through SQLite placeholders.
+    Validates selected columns and uses parameters for filter values,
+    LIMIT, and OFFSET.
 
     Args:
         database (str): Name of the registered database.
-        table (str): Name of the registered table.
-        columns (str | list | tuple): '*' for all columns, one name, or an ordered collection.
-        filters (dict | None): Optional conditions interpreted by _where().
-        order_by (str | None): Column used for sorting; None means no explicit order.
-        descending (bool): Whether order_by should use DESC rather than ASC.
-        limit (int | None): Maximum records; None means no limit and 0 returns none.
-        offset (int): Number of matching rows to skip, normally with ORDER BY.
+        table (str): Name of the target table.
+        columns (str | list | tuple): Selected columns, or "*".
+        filters (dict | None): Optional filter conditions.
+        order_by (str | None): Column used for sorting.
+        descending (bool): Whether sorting should use DESC.
+        limit (int | None): Maximum returned rows, or None for all.
+        offset (int): Number of matching rows to skip.
 
     Returns:
-        tuple[str, tuple]: The SELECT statement and parameters in SQL order.
+        tuple[str, tuple]: SELECT statement and SQL parameters.
 
     Raises:
-        TypeError: If an argument has an incorrect Python type.
-        ValueError: If a column, filter, limit, or offset is invalid.
+        TypeError: If an argument has an invalid type.
+        ValueError: If a column, filter, or pagination value is invalid.
 
     Usage:
         query, parameters = query_builders["SELECT"](
-            "materials", "school", columns=["name", "price"],
-            filters={"quantity": {"gte": 10}}, order_by="price", descending=True, limit=20, offset=5
+            "materials", "school", filters={"quantity": {"gte": 10}}, order_by="price"
         )
     """
     _check_columns(database, table)
@@ -710,7 +1029,6 @@ def _build_select(database, table, columns="*", filters=None, order_by=None, des
         else:
             _check_columns(database, table, (columns,))
             selected_columns = _quote_identifier(columns)
-
     else:
         if not isinstance(columns, (list, tuple)):
             raise TypeError("'columns' must be '*', a column name, list, or tuple.")
@@ -721,7 +1039,6 @@ def _build_select(database, table, columns="*", filters=None, order_by=None, des
         selected_columns = ", ".join(_quote_identifier(column) for column in columns)
 
     query = f"SELECT {selected_columns} FROM {_quote_identifier(table)}"
-
     where_clause, where_parameters = _where(database, table, filters)
     query += where_clause
     parameters = list(where_parameters)
@@ -731,7 +1048,6 @@ def _build_select(database, table, columns="*", filters=None, order_by=None, des
             raise TypeError(f"'order_by' must be a string or None, received {type(order_by).__name__}.")
         _check_columns(database, table, (order_by,))
         query += f" ORDER BY {_quote_identifier(order_by)} {'DESC' if descending else 'ASC'}"
-
     elif descending:
         raise ValueError("'descending=True' requires an 'order_by' column.")
 
@@ -751,25 +1067,25 @@ def _build_select(database, table, columns="*", filters=None, order_by=None, des
 @_register_query("UPDATE")
 def _build_update(database, table, values, filters=None, allow_all=False, require_unique=True):
     """
-    Build an UPDATE statement with checked conditions and parameterized values.
+    Build a parameterized UPDATE statement with safety checks.
 
-    Updates all matching records if require_unique is disabled. Unfiltered
-    updates require both allow_all=True and require_unique=False.
+    By default, requires equality on a declared unique column.
+    Unfiltered updates require allow_all=True and require_unique=False.
 
     Args:
         database (str): Name of the registered database.
-        table (str): Name of the registered table.
-        values (dict): Column names mapped to new values.
-        filters (dict | None): Conditions identifying records to modify.
-        allow_all (bool): Explicitly permit updating every record when no filter exists.
-        require_unique (bool): Require equality on a declared unique column by default.
+        table (str): Name of the target table.
+        values (dict): Columns mapped to their new values.
+        filters (dict | None): Conditions selecting records.
+        allow_all (bool): Permit updating all records.
+        require_unique (bool): Require a unique equality condition.
 
     Returns:
-        tuple[str, tuple]: The UPDATE statement and parameters, with SET values first.
+        tuple[str, tuple]: UPDATE statement and its parameters.
 
     Raises:
         TypeError: If values or a safety option has an incorrect type.
-        ValueError: If values are empty or the update conditions are not allowed.
+        ValueError: If values or filtering conditions are invalid.
 
     Usage:
         query, parameters = query_builders["UPDATE"](
@@ -793,24 +1109,24 @@ def _build_update(database, table, values, filters=None, allow_all=False, requir
 @_register_query("DELETE")
 def _build_delete(database, table, filters=None, allow_all=False, require_unique=True):
     """
-    Build a DELETE statement with safety checks for matching records.
+    Build a parameterized DELETE statement with safety checks.
 
-    Deletes all matching records if require_unique is disabled. Unfiltered
-    deletion requires both allow_all=True and require_unique=False.
+    By default, requires equality on a declared unique column.
+    Unfiltered deletion requires allow_all=True and require_unique=False.
 
     Args:
         database (str): Name of the registered database.
-        table (str): Name of the registered table.
-        filters (dict | None): Conditions selecting records to delete.
-        allow_all (bool): Explicitly permit deleting all rows when no filters exist.
-        require_unique (bool): Require equality on a declared unique column by default.
+        table (str): Name of the target table.
+        filters (dict | None): Conditions selecting records.
+        allow_all (bool): Permit deleting all records.
+        require_unique (bool): Require a unique equality condition.
 
     Returns:
-        tuple[str, tuple]: The DELETE statement and the WHERE parameters.
+        tuple[str, tuple]: DELETE statement and SQL parameters.
 
     Raises:
-        TypeError: If a safety option or filter has an incorrect type.
-        ValueError: If the deletion conditions are not allowed.
+        TypeError: If filters or a safety option has an incorrect type.
+        ValueError: If deletion conditions are not permitted.
 
     Usage:
         query, parameters = query_builders["DELETE"]("materials", "school", filters={"id": 1})
@@ -822,25 +1138,24 @@ def _build_delete(database, table, filters=None, allow_all=False, require_unique
 @_register_query("COUNT")
 def _build_count(database, table, filters=None):
     """
-    Build a SELECT COUNT(*) statement for matching rows.
+    Build a SELECT COUNT(*) statement for matching records.
 
-    Unlike SELECT, this operation returns the total number of matches
-    without retrieving every matching record.
+    Counts records without retrieving the complete rows.
 
     Args:
         database (str): Name of the registered database.
-        table (str): Name of the registered table.
-        filters (dict | None): Conditions restricting which records are counted.
+        table (str): Name of the target table.
+        filters (dict | None): Conditions restricting the count.
 
     Returns:
-        tuple[str, tuple]: The COUNT statement and WHERE parameters.
+        tuple[str, tuple]: COUNT statement and SQL parameters.
 
     Raises:
         TypeError: If filters has an invalid type.
-        ValueError: If the table or filter columns are not registered.
+        ValueError: If the table or filtering columns are invalid.
 
     Usage:
-        query, parameters = query_builders["COUNT"]("materials", "school", filters={"quantity": {"gte": 10}})
+        query, parameters = query_builders["COUNT"]("materials", "school")
     """
     where_clause, parameters = _where(database, table, filters)
     return f"SELECT COUNT(*) FROM {_quote_identifier(table)}{where_clause}", parameters
@@ -850,32 +1165,30 @@ def _build_count(database, table, filters=None):
 @_handle_errors
 def _execute(action, database, table, **kwargs):
     """
-    Build and execute one registered SQL operation on a managed connection.
+    Build and execute a registered SQL operation.
 
-    The query builder produces SQL plus parameters. This function runs the
-    query, retrieves the appropriate result, and commits or rolls back the
-    transaction before closing the connection.
+    Retrieves the query builder, executes the statement, and returns
+    its result. The connection manager commits or rolls back automatically.
 
     Args:
-        action (str): Registered query action, such as CREATE, INSERT, or SELECT.
+        action (str): Registered SQL action.
         database (str): Name of the registered database.
-        table (str): Name of the registered table.
-        **kwargs: Additional options accepted by the selected query builder.
+        table (str): Name of the target table.
+        **kwargs: Additional arguments accepted by the query builder.
 
     Returns:
-        int: The last inserted row ID for INSERT, affected row count for
-            UPDATE/DELETE, or number of matches for COUNT.
-        list[tuple]: Records returned by SELECT, with columns in requested order.
-        None: For CREATE or operations without a defined result.
+        int: Inserted row ID, affected row count, or COUNT result.
+        list[tuple]: Rows returned by SELECT.
+        None: For CREATE or operations without a result.
 
     Raises:
-        TypeError: If an argument has an invalid Python type.
-        ValueError: If action or an argument is invalid.
-        sqlite3.Error: If SQLite fails to execute or commit the operation.
+        TypeError: If an argument has an invalid type.
+        ValueError: If action or another argument is invalid.
+        sqlite3.Error: If SQLite cannot execute or commit the operation.
 
     Usage:
         _execute("CREATE", "materials", "school")
-        _execute("INSERT", "materials", "school", values={"name": "Pencil", "quantity": 10, "price": 2.50})
+        _execute("SELECT", "materials", "school", limit=10)
     """
     if not isinstance(action, str):
         raise TypeError(f"SQL action must be a string, received {type(action).__name__}.")
@@ -884,18 +1197,18 @@ def _execute(action, database, table, **kwargs):
 
     query, parameters = query_builders[action](database, table, **kwargs)
 
-    with closing(_connect_database(database)) as connection:
-        with connection:
-            with closing(connection.execute(query, parameters)) as cursor:
-                if action == "INSERT":
-                    return cursor.lastrowid
-                elif action == "SELECT":
-                    return cursor.fetchall()
-                elif action == "COUNT":
-                    return cursor.fetchone()[0]
-                elif action in ("UPDATE", "DELETE"):
-                    return cursor.rowcount
-                return None
+    with _ConnectionManager(database) as connection:
+        with closing(connection.execute(query, parameters)) as cursor:
+            if action == "INSERT":
+                return cursor.lastrowid
+            elif action == "SELECT":
+                return cursor.fetchall()
+            elif action == "COUNT":
+                return cursor.fetchone()[0]
+            elif action in ("UPDATE", "DELETE"):
+                return cursor.rowcount
+
+            return None
 
 
 # Public operations
@@ -903,18 +1216,16 @@ class Database:
     """
     Provide a simple interface for managing a registered SQLite database.
 
-    Stores the database name and provides methods for creating tables,
-    inserting, searching, updating, deleting, and counting records.
-
-    All SQL statements are generated and executed by the library's
-    internal functions. Users do not need to write SQL directly.
+    Stores the database name and exposes initialization, table creation,
+    insertion, searching, updating, deletion, and counting operations.
+    Internal functions generate and execute the SQL statements.
 
     Args:
         name (str): Name of a database registered in 'databases'.
 
     Raises:
-        TypeError: If the database configuration contains invalid types.
-        ValueError: If the database is unknown or its configuration is invalid.
+        TypeError: If the database configuration has invalid types.
+        ValueError: If the database is unknown or incorrectly configured.
 
     Usage:
         db = Database("materials")
@@ -931,7 +1242,7 @@ class Database:
         Initialize the database and create its registered tables.
 
         Applies the configured journal mode and creates missing tables.
-        Existing table structures are not modified or migrated.
+        Existing tables are not modified or migrated.
 
         Returns:
             None: If initialization succeeds.
@@ -948,14 +1259,14 @@ class Database:
         """
         Create a registered table if it does not already exist.
 
-        Uses the column definitions stored in the database configuration.
+        Uses the column definitions stored in the Python configuration.
         Existing table structures are not modified.
 
         Args:
             table (str): Name of the table to create.
 
         Returns:
-            None: If the operation succeeds.
+            None: If creation succeeds.
 
         Raises:
             ValueError: If the table is not registered.
@@ -968,21 +1279,21 @@ class Database:
 
     def insert(self, table, values):
         """
-        Insert a new record into a registered table.
+        Insert one record into a registered SQLite table.
 
-        Column names and values must be supplied as a dictionary.
-        SQLite validates the data against the table constraints.
+        Uses a dictionary containing column names and values.
+        SQLite enforces the table's constraints during insertion.
 
         Args:
-            table (str): Name of the table.
-            values (dict): Column names mapped to their values.
+            table (str): Name of the target table.
+            values (dict): Columns mapped to their values.
 
         Returns:
-            int: SQLite row ID of the inserted record.
+            int: Row ID assigned to the inserted record.
 
         Raises:
             TypeError: If values is not a dictionary.
-            ValueError: If values is empty or contains invalid columns.
+            ValueError: If values is empty or includes invalid columns.
             sqlite3.Error: If SQLite cannot insert the record.
 
         Usage:
@@ -992,25 +1303,22 @@ class Database:
 
     def search(self, table, columns="*", filters=None, order_by=None, descending=False, limit=20, offset=0):
         """
-        Retrieve records using optional filters, sorting, and pagination.
-
-        Supports selecting specific columns, filtering with comparison
-        operators, sorting by a column, and limiting returned records.
+        Retrieve records using optional filtering, sorting, and pagination.
 
         Args:
-            table (str): Name of the table to search.
-            columns (str | list | tuple): Columns to retrieve, or "*" for all.
-            filters (dict | None): Conditions used to select records.
-            order_by (str | None): Column used to sort the results.
-            descending (bool): Whether to sort in descending order.
-            limit (int | None): Maximum number of records, or None for all.
+            table (str): Name of the table.
+            columns (str | list | tuple): Selected columns, or "*".
+            filters (dict | None): Conditions selecting records.
+            order_by (str | None): Column used for sorting.
+            descending (bool): Sort in descending order if True.
+            limit (int | None): Maximum results, or None for all.
             offset (int): Number of matching records to skip.
 
         Returns:
-            list[tuple]: Matching records in the requested column order.
+            list[tuple]: Matching rows in selected column order.
 
         Raises:
-            TypeError: If an argument has an incorrect type.
+            TypeError: If an option has an invalid type.
             ValueError: If a column, filter, or pagination value is invalid.
             sqlite3.Error: If SQLite cannot execute the query.
 
@@ -1024,22 +1332,22 @@ class Database:
         """
         Update records matching the specified conditions.
 
-        By default, requires an equality filter on a registered unique
-        column. Multiple-record updates require require_unique=False,
-        and unfiltered updates also require allow_all=True.
+        By default, requires equality on a declared unique column.
+        Bulk updates require require_unique=False, and updating every
+        record also requires allow_all=True.
 
         Args:
             table (str): Name of the table.
-            values (dict): Column names mapped to their new values.
-            filters (dict | None): Conditions identifying records to update.
-            allow_all (bool): Whether updates without filters are permitted.
-            require_unique (bool): Whether a unique equality filter is required.
+            values (dict): Columns mapped to new values.
+            filters (dict | None): Conditions selecting records.
+            allow_all (bool): Permit unfiltered updates.
+            require_unique (bool): Require a unique equality filter.
 
         Returns:
-            int: Number of records affected by the UPDATE operation.
+            int: Number of records affected.
 
         Raises:
-            TypeError: If values or a safety option has an invalid type.
+            TypeError: If an argument has an invalid type.
             ValueError: If columns or update conditions are invalid.
             sqlite3.Error: If SQLite cannot complete the update.
 
@@ -1053,22 +1361,22 @@ class Database:
         """
         Delete records matching the specified conditions.
 
-        By default, requires an equality filter on a registered unique
-        column. Deleting multiple records requires require_unique=False,
-        and deleting every record also requires allow_all=True.
+        By default, requires equality on a declared unique column.
+        Bulk deletions require require_unique=False, and deletion of
+        every record also requires allow_all=True.
 
         Args:
             table (str): Name of the table.
-            filters (dict | None): Conditions identifying records to delete.
-            allow_all (bool): Whether deletion without filters is permitted.
-            require_unique (bool): Whether a unique equality filter is required.
+            filters (dict | None): Conditions selecting records.
+            allow_all (bool): Permit unfiltered deletion.
+            require_unique (bool): Require a unique equality filter.
 
         Returns:
             int: Number of records deleted.
 
         Raises:
-            TypeError: If a filter or safety option has an invalid type.
-            ValueError: If the deletion conditions are not permitted.
+            TypeError: If an argument has an invalid type.
+            ValueError: If deletion conditions are invalid.
             sqlite3.Error: If SQLite cannot complete the deletion.
 
         Usage:
@@ -1079,14 +1387,14 @@ class Database:
 
     def count(self, table, filters=None):
         """
-        Count records matching optional filtering conditions.
+        Count records matching optional filter conditions.
 
-        Returns the number of matching records without retrieving
-        their complete data. Without filters, counts the entire table.
+        Returns the number of matches without retrieving complete rows.
+        Without filters, counts every record in the table.
 
         Args:
             table (str): Name of the table.
-            filters (dict | None): Conditions used to select records.
+            filters (dict | None): Conditions selecting records.
 
         Returns:
             int: Number of matching records.
